@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'airtable_sync.dart';
@@ -11,10 +12,11 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _pat = TextEditingController();
   final _handset = TextEditingController();
   String _version = '';
+  bool _hasKey = false;
   String _status = '';
+  String _debug = '';
   bool _busy = false;
 
   @override
@@ -29,19 +31,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final handset = await Settings.handset;
     if (!mounted) return;
     setState(() {
-      _pat.text = pat;
       _handset.text = handset;
+      _hasKey = pat.isNotEmpty;
       _version = 'v${info.version}+${info.buildNumber}';
     });
   }
 
-  Future<void> _saveFields() async {
-    await Settings.setPat(_pat.text);
-    await Settings.setHandset(_handset.text);
-  }
-
   Future<void> _download() async {
-    await _saveFields();
+    await Settings.setHandset(_handset.text);
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _status = 'Downloading...';
@@ -59,7 +57,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _upload() async {
-    await _saveFields();
+    await Settings.setHandset(_handset.text);
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _status = 'Sending...';
@@ -72,9 +71,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<void> _test() async {
+    setState(() {
+      _busy = true;
+      _status = 'Testing connection...';
+      _debug = '';
+    });
+    final r = await AirtableSync.testConnection();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _status = r.ok ? 'Connection OK' : 'Connection problem. See details below.';
+      _debug = r.message;
+    });
+  }
+
   @override
   void dispose() {
-    _pat.dispose();
     _handset.dispose();
     super.dispose();
   }
@@ -90,14 +103,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             controller: _handset,
             style: const TextStyle(fontSize: 20),
             decoration: const InputDecoration(labelText: 'Handset name', border: OutlineInputBorder()),
-            onChanged: (_) => _saveFields(),
+            onChanged: (v) => Settings.setHandset(v),
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: _pat,
-            style: const TextStyle(fontSize: 16),
-            decoration: const InputDecoration(labelText: 'Airtable key', border: OutlineInputBorder()),
-            onChanged: (_) => _saveFields(),
+          Row(
+            children: [
+              Icon(_hasKey ? Icons.check_circle : Icons.error,
+                  color: _hasKey ? Colors.green.shade700 : Colors.red),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _hasKey ? 'Airtable key: built into app' : 'Airtable key: MISSING from this build',
+                  style: const TextStyle(fontSize: 18),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -115,8 +135,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: const Text('Send results', style: TextStyle(fontSize: 22)),
             ),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 64,
+            child: OutlinedButton.icon(
+              onPressed: _busy ? null : _test,
+              icon: const Icon(Icons.network_check),
+              label: const Text('Test connection', style: TextStyle(fontSize: 22)),
+            ),
+          ),
           const SizedBox(height: 16),
           Text(_status, style: const TextStyle(fontSize: 18)),
+          if (_debug.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: SelectableText(
+                _debug,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: _debug));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('Details copied')));
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy details'),
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           Text(_version, textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
         ],

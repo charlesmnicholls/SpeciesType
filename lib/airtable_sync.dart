@@ -7,10 +7,7 @@ import 'db.dart';
 
 class Settings {
   static Future<String> get pat async =>
-      (await Db.instance.getSetting('pat')).replaceAll(RegExp(r'[\r\n\s]'), '');
-
-  static Future<void> setPat(String v) =>
-      Db.instance.setSetting('pat', v.replaceAll(RegExp(r'[\r\n\s]'), ''));
+      Config.embeddedPat.replaceAll(RegExp(r'[\r\n\s]'), '');
 
   static Future<String> get handset async =>
       (await Db.instance.getSetting('handset')).trim();
@@ -167,5 +164,100 @@ class AirtableSync {
       return SyncResult(false, 'No connection. $sent sent. $e');
     }
     return SyncResult(true, '$sent records sent.');
+  }
+
+  /// Read-only test of the key, the network and both tables. Returns a debug report.
+  /// It does not write to Airtable.
+  static Future<SyncResult> testConnection() async {
+    final out = StringBuffer();
+    var ok = true;
+    void line(String s) => out.writeln(s);
+    String short(String s) => s.length > 400 ? '${s.substring(0, 400)}...' : s;
+
+    final pat = await Settings.pat;
+    line('Base: ${Config.baseId}');
+    if (pat.isEmpty) {
+      line('Key: MISSING. The APK was built without the AIRTABLE_PAT secret.');
+      return SyncResult(false, out.toString());
+    }
+    line('Key: ${pat.substring(0, pat.length < 3 ? pat.length : 3)}...'
+        '${pat.length > 4 ? pat.substring(pat.length - 4) : ''} '
+        '(${pat.length} chars${pat.startsWith('pat') ? '' : ', does not start with "pat"'})');
+
+    Future<Map<String, dynamic>?> get(String label, Uri uri) async {
+      line('');
+      line('== $label');
+      line('GET ${uri.path}${uri.hasQuery ? '?${Uri.decodeQueryComponent(uri.query)}' : ''}');
+      final sw = Stopwatch()..start();
+      try {
+        final r = await http
+            .get(uri, headers: _headers(pat))
+            .timeout(const Duration(seconds: 20));
+        line('HTTP ${r.statusCode} in ${sw.elapsedMilliseconds} ms');
+        if (r.statusCode != 200) {
+          ok = false;
+          line(short(r.body));
+          if (r.statusCode == 401) line('-> Key is wrong or expired.');
+          if (r.statusCode == 403) line('-> Key has no access to this base or table, or the table name is wrong.');
+          if (r.statusCode == 404) line('-> Base or table not found. Check the names in config.dart.');
+          if (r.statusCode == 422) line('-> A field name in the request is wrong.');
+          return null;
+        }
+        return jsonDecode(r.body) as Map<String, dynamic>;
+      } catch (e) {
+        ok = false;
+        line('FAILED after ${sw.elapsedMilliseconds} ms: $e');
+        return null;
+      }
+    }
+
+    String describe(dynamic v) =>
+        v == null ? '(empty)' : '${jsonEncode(v)}  [${v is List ? 'list' : v is Map ? 'object' : v.runtimeType}]';
+
+    // 1. Species table, all fields of one record: shows the real field names and types.
+    final species = await get('Read table "${Config.speciesTable}" (1 record)',
+        Uri.parse(_url(Config.speciesTable)).replace(queryParameters: {'pageSize': '1'}));
+    if (species != null) {
+      final recs = (species['records'] as List?) ?? [];
+      if (recs.isEmpty) {
+        line('Table is empty.');
+      } else {
+        final f = (recs.first['fields'] ?? {}) as Map<String, dynamic>;
+        line('Fields in first record: ${f.keys.join(', ')}');
+        for (final name in [Config.speciesTableBarcodeField, Config.speciesTableSpeciesField]) {
+          line('  $name = ${f.containsKey(name) ? describe(f[name]) : 'NOT FOUND (empty or wrong name)'}');
+          if (!f.containsKey(name)) ok = false;
+        }
+        line('  App reads: barcode "${_clean(_text(f[Config.speciesTableBarcodeField]))}", '
+            'species "${_text(f[Config.speciesTableSpeciesField])}"');
+      }
+    }
+
+    // 2. The same query Download trees uses (repeated fields[] keys).
+    final dl = await get('Download query (fields filter)',
+        Uri.parse(_url(Config.speciesTable)).replace(queryParameters: {
+          'pageSize': '1',
+          'fields[]': [Config.speciesTableBarcodeField, Config.speciesTableSpeciesField],
+        }));
+    if (dl != null) {
+      final recs = (dl['records'] as List?) ?? [];
+      line(recs.isEmpty
+          ? 'No records returned.'
+          : 'Fields returned: ${((recs.first['fields'] ?? {}) as Map).keys.join(', ')}');
+    }
+
+    // 3. Results table: read access and existing field names.
+    final res = await get('Read table "${Config.resultsTable}" (1 record)',
+        Uri.parse(_url(Config.resultsTable)).replace(queryParameters: {'pageSize': '1'}));
+    if (res != null) {
+      final recs = (res['records'] as List?) ?? [];
+      line(recs.isEmpty
+          ? 'Table found. It has no records yet, so field names cannot be checked.'
+          : 'Fields in first record: ${((recs.first['fields'] ?? {}) as Map).keys.join(', ')}');
+    }
+
+    line('');
+    line(ok ? 'RESULT: OK' : 'RESULT: PROBLEM FOUND (see above)');
+    return SyncResult(ok, out.toString());
   }
 }

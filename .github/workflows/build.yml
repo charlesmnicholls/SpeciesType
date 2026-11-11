@@ -43,7 +43,7 @@ jobs:
 
       # arm64 only: a fat APK crashes on start on the Nautiz X41.
       - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64
+        run: flutter build apk --release --target-platform android-arm64 --dart-define=AIRTABLE_PAT=${{ secrets.AIRTABLE_PAT }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

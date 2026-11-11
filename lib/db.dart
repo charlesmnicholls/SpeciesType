@@ -1,6 +1,8 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'config.dart';
+
 class Db {
   Db._();
   static final Db instance = Db._();
@@ -10,7 +12,7 @@ class Db {
 
   Future<Database> _open() async {
     final path = join(await getDatabasesPath(), 'species_check.db');
-    return openDatabase(path, version: 1, onCreate: (d, v) async {
+    return openDatabase(path, version: 1, onOpen: _addTestTrees, onCreate: (d, v) async {
       await d.execute(
           'CREATE TABLE trees (barcode TEXT PRIMARY KEY, species TEXT, plot TEXT)');
       await d.execute('CREATE TABLE checks ('
@@ -44,7 +46,19 @@ class Db {
         batch.insert('trees', r, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
+      await _addTestTrees(t);
     });
+  }
+
+  /// Put the test trees from Config into the tree list, if they are not there.
+  static Future<void> _addTestTrees(DatabaseExecutor d) async {
+    for (final e in Config.testTrees.entries) {
+      await d.insert(
+        'trees',
+        {'barcode': e.key, 'species': e.value, 'plot': e.key.substring(0, 2)},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
   }
 
   Future<int> treeCount() async {

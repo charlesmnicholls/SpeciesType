@@ -36,7 +36,7 @@ class _ScanScreenState extends State<ScanScreen> {
       await _askHandset();
     }
     if (!mounted) return;
-    if (_counts['total'] == 0) {
+    if ((_counts['total'] ?? 0) <= Config.testTrees.length) {
       _snack('Open Settings and tap Download trees.');
     }
     _focus.requestFocus();
@@ -226,7 +226,7 @@ class _ScanScreenState extends State<ScanScreen> {
               decoration: const InputDecoration(
                 labelText: 'Scan barcode',
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.qr_code_scanner),
+                prefixIcon: BarcodeIcon(),
               ),
               onSubmitted: _lookup,
             ),
@@ -307,6 +307,32 @@ class _ScanScreenState extends State<ScanScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A plain 1D (linear) barcode icon. Material Icons has only 2D (QR) scanner icons.
+class BarcodeIcon extends StatelessWidget {
+  const BarcodeIcon({super.key});
+
+  // Bar widths in px; gaps of 2 px between bars.
+  static const List<double> _bars = [3, 1, 2, 1, 3, 2, 1, 3, 1, 2];
+
+  @override
+  Widget build(BuildContext context) {
+    final color = IconTheme.of(context).color ?? Theme.of(context).colorScheme.onSurfaceVariant;
+    return Center(
+      widthFactor: 1,
+      child: SizedBox(
+        height: 24,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final w in _bars)
+              Container(width: w, height: 24, margin: const EdgeInsets.only(right: 2), color: color),
+          ],
+        ),
+      ),
     );
   }
 }
