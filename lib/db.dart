@@ -17,7 +17,22 @@ class Db {
           'barcode TEXT PRIMARY KEY, plot TEXT, recorded TEXT, confirmed TEXT, '
           'status TEXT, checked_at TEXT, handset TEXT, '
           'synced INTEGER NOT NULL DEFAULT 0, airtable_id TEXT)');
+      // Settings live here, not in shared_preferences. shared_preferences pulls in
+      // androidx.datastore, which crashes on start on the Nautiz X41.
+      await d.execute('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
     });
+  }
+
+  Future<String> getSetting(String key) async {
+    final d = await db;
+    final rows = await d.query('settings', where: 'key = ?', whereArgs: [key]);
+    return rows.isEmpty ? '' : (rows.first['value'] as String? ?? '');
+  }
+
+  Future<void> setSetting(String key, String value) async {
+    final d = await db;
+    await d.insert('settings', {'key': key, 'value': value},
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> replaceTrees(List<Map<String, String>> trees) async {

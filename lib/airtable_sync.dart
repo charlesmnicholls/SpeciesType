@@ -1,31 +1,22 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
 import 'db.dart';
 
 class Settings {
-  static Future<String> get pat async {
-    final p = await SharedPreferences.getInstance();
-    return (p.getString('pat') ?? '').replaceAll(RegExp(r'[\r\n\s]'), '');
-  }
+  static Future<String> get pat async =>
+      (await Db.instance.getSetting('pat')).replaceAll(RegExp(r'[\r\n\s]'), '');
 
-  static Future<void> setPat(String v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString('pat', v.replaceAll(RegExp(r'[\r\n\s]'), ''));
-  }
+  static Future<void> setPat(String v) =>
+      Db.instance.setSetting('pat', v.replaceAll(RegExp(r'[\r\n\s]'), ''));
 
-  static Future<String> get handset async {
-    final p = await SharedPreferences.getInstance();
-    return (p.getString('handset') ?? '').trim();
-  }
+  static Future<String> get handset async =>
+      (await Db.instance.getSetting('handset')).trim();
 
-  static Future<void> setHandset(String v) async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString('handset', v.trim());
-  }
+  static Future<void> setHandset(String v) =>
+      Db.instance.setSetting('handset', v.trim());
 }
 
 class SyncResult {

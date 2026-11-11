@@ -83,7 +83,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _buzz() async {
     try {
-      if (await Vibration.hasVibrator() ?? false) Vibration.vibrate(duration: 80);
+      if (await Vibration.hasVibrator()) Vibration.vibrate(duration: 80);
     } catch (_) {}
   }
 

@@ -1,0 +1,52 @@
+name: Build Species Check APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}   # lets you trigger a build manually from the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.47.9'   # same version used to check the code locally
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Decode signing keystore
+        run: |
+          echo "${{ secrets.SPECIES_KEYSTORE_BASE64 }}" | base64 -d > android/app/species-release.keystore
+
+      - name: Write key.properties
+        run: |
+          cat > android/key.properties << EOF
+          storePassword=${{ secrets.SPECIES_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.SPECIES_KEY_PASSWORD }}
+          keyAlias=${{ secrets.SPECIES_KEY_ALIAS }}
+          storeFile=species-release.keystore
+          EOF
+
+      # arm64 only: a fat APK crashes on start on the Nautiz X41.
+      - name: Build release APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcc-species-check-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
