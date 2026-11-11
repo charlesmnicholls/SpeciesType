@@ -215,7 +215,7 @@ class AirtableSync {
         v == null ? '(empty)' : '${jsonEncode(v)}  [${v is List ? 'list' : v is Map ? 'object' : v.runtimeType}]';
 
     // 1. Species table, all fields of one record: shows the real field names and types.
-    final species = await get('Read table "${Config.speciesTable}" (1 record)',
+    final species = await get('Read table "${Config.speciesTableName}" (1 record)',
         Uri.parse(_url(Config.speciesTable)).replace(queryParameters: {'pageSize': '1'}));
     if (species != null) {
       final recs = (species['records'] as List?) ?? [];
@@ -247,7 +247,7 @@ class AirtableSync {
     }
 
     // 3. Results table: read access and existing field names.
-    final res = await get('Read table "${Config.resultsTable}" (1 record)',
+    final res = await get('Read table "${Config.resultsTableName}" (1 record)',
         Uri.parse(_url(Config.resultsTable)).replace(queryParameters: {'pageSize': '1'}));
     if (res != null) {
       final recs = (res['records'] as List?) ?? [];

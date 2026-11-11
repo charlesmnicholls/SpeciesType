@@ -14,13 +14,18 @@ class Config {
     '680003': 'Birch',
   };
 
+  // Tables are addressed by ID, so a table rename in Airtable does not break the app.
+  // The names are only shown in the test report.
+
   // Table that holds the current species for each barcode (read only).
-  static const String speciesTable = 'Basal Dia & DBH';
+  static const String speciesTable = 'tblZiaoHumQrAm5sI';
+  static const String speciesTableName = 'Basal Dia & DBH';
   static const String speciesTableBarcodeField = 'Barcode';
   static const String speciesTableSpeciesField = 'Species';
 
   // New table that receives the survey results (write).
-  static const String resultsTable = 'Species Check';
+  static const String resultsTable = 'tblVczkpYksj6Z3Q9';
+  static const String resultsTableName = 'Species Check';
   static const String fBarcode = 'Barcode';
   static const String fPlot = 'Plot';
   static const String fRecorded = 'Recorded Species';
