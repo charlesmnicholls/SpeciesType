@@ -17,6 +17,13 @@ class SpeciesCheckApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF2E7D32),
+        // Green top ribbon with white title and icons, as in the other TCC apps.
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF2E7D32),
+          foregroundColor: Colors.white,
+          iconTheme: IconThemeData(color: Colors.white),
+          actionsIconTheme: IconThemeData(color: Colors.white),
+        ),
         textTheme: const TextTheme(
           bodyLarge: TextStyle(fontSize: 20),
           bodyMedium: TextStyle(fontSize: 18),

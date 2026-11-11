@@ -20,7 +20,7 @@ class _ScanScreenState extends State<ScanScreen> {
   Map<String, Object?>? _tree;
   Map<String, Object?>? _existing;
   String? _error;
-  Map<String, int> _counts = {'total': 0, 'checked': 0, 'changed': 0, 'pending': 0};
+  Map<String, int> _counts = {'total': 0, 'checked': 0, 'changed': 0, 'pending': 0, 'today': 0};
   bool _syncing = false;
 
   @override
@@ -194,7 +194,7 @@ class _ScanScreenState extends State<ScanScreen> {
         actions: [
           IconButton(
             iconSize: 32,
-            tooltip: 'Send data',
+            tooltip: 'Sync records',
             onPressed: _syncing ? null : () => _sync(),
             icon: _syncing
                 ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3))
@@ -234,8 +234,7 @@ class _ScanScreenState extends State<ScanScreen> {
             Expanded(child: _body()),
             const SizedBox(height: 8),
             Text(
-              'Checked ${_counts['checked']} of ${_counts['total']}   '
-              'Changed ${_counts['changed']}',
+              'Scanned today: ${_counts['today']}',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 18),
             ),
@@ -261,49 +260,63 @@ class _ScanScreenState extends State<ScanScreen> {
     }
     final species = (t['species'] as String?) ?? '';
     final prev = _existing;
+    // Small screen (Nautiz X41): the species panel takes the free space, and the
+    // text scales down to fit it. Buttons have fixed, finger-sized heights.
+    final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text('Tree ${t['barcode']}   Plot ${t['plot']}',
-            textAlign: TextAlign.center, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 8),
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 18)),
+        const SizedBox(height: 6),
         Expanded(
-          child: Card(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(species.isEmpty ? 'No species' : species,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 44, fontWeight: FontWeight.bold)),
-                  if (prev != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        'Already checked: ${prev['confirmed']}',
-                        style: const TextStyle(fontSize: 20, color: Colors.orange),
-                      ),
-                    ),
-                ],
-              ),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              border: Border.all(color: Colors.green.shade200),
+              borderRadius: BorderRadius.circular(12),
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 88,
-          child: FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.green.shade700),
-            onPressed: species.isEmpty ? null : () => _save(species),
-            child: const Text('CORRECT', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(species.isEmpty ? 'No species' : species,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 44, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                if (prev != null)
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Already checked: ${prev['confirmed']}',
+                      style: TextStyle(fontSize: 18, color: Colors.orange.shade800),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 64,
+          height: 72,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Colors.green.shade700, shape: buttonShape),
+            onPressed: species.isEmpty ? null : () => _save(species),
+            child: const Text('CORRECT', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 56,
           child: OutlinedButton(
+            style: OutlinedButton.styleFrom(shape: buttonShape),
             onPressed: _change,
-            child: const Text('CHANGE SPECIES', style: TextStyle(fontSize: 24)),
+            child: const Text('CHANGE SPECIES', style: TextStyle(fontSize: 22)),
           ),
         ),
       ],
