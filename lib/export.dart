@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'airtable_sync.dart';
 import 'db.dart';
+import 'format.dart';
 
 class ExportResult {
   final bool ok;
@@ -32,24 +33,19 @@ class CsvExport {
     return RegExp(r'[",\r\n]').hasMatch(s) ? '"${s.replaceAll('"', '""')}"' : s;
   }
 
-  static String _two(int n) => n.toString().padLeft(2, '0');
-
   static Future<ExportResult> shareResults() async {
     final rows = await Db.instance.allChecks();
     if (rows.isEmpty) return ExportResult(false, 'No results on this handset.');
 
     final b = StringBuffer()..writeln(_header.join(','));
     for (final r in rows) {
-      final at = DateTime.tryParse((r['checked_at'] as String?) ?? '')?.toLocal();
       b.writeln([
         r['barcode'],
         r['plot'],
         r['recorded'],
         r['confirmed'],
         r['status'],
-        at == null
-            ? r['checked_at']
-            : '${at.year}-${_two(at.month)}-${_two(at.day)} ${_two(at.hour)}:${_two(at.minute)}',
+        formatIso(r['checked_at'] as String?, empty: ''),
         r['handset'],
         r['synced'] == 1 ? 'Yes' : 'No',
       ].map(_cell).join(','));
@@ -57,8 +53,7 @@ class CsvExport {
 
     final now = DateTime.now();
     final handset = (await Settings.handset).replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-    final name = 'species_check_${handset.isEmpty ? 'handset' : handset}_'
-        '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}.csv';
+    final name = 'species_check_${handset.isEmpty ? 'handset' : handset}_${fileStamp(now)}.csv';
     final file = File(join((await getTemporaryDirectory()).path, name));
     await file.writeAsString(b.toString());
 

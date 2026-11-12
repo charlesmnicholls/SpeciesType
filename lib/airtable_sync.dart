@@ -23,6 +23,12 @@ class SyncResult {
 }
 
 class AirtableSync {
+  /// Settings keys for the time of the last tree download and the last record sync.
+  static const lastDownloadKey = 'last_download';
+  static const lastSyncKey = 'last_sync';
+
+  static Future<void> _stampSync() =>
+      Db.instance.setSetting(lastSyncKey, DateTime.now().toUtc().toIso8601String());
   static Map<String, String> _headers(String pat) => {
         'Authorization': 'Bearer $pat',
         'Content-Type': 'application/json',
@@ -98,6 +104,7 @@ class AirtableSync {
       return SyncResult(false, 'No trees found. Check the table and field names.');
     }
     await Db.instance.replaceTrees(trees);
+    await Db.instance.setSetting(lastDownloadKey, DateTime.now().toUtc().toIso8601String());
     return SyncResult(true, '${trees.length} trees downloaded.');
   }
 
@@ -116,7 +123,7 @@ class AirtableSync {
     final pat = await Settings.pat;
     if (pat.isEmpty) return SyncResult(false, 'Enter the Airtable key in Settings.');
     final pending = await Db.instance.unsyncedChecks();
-    if (pending.isEmpty) return SyncResult(true, 'Nothing to send.');
+    if (pending.isEmpty) return SyncResult(true, 'Nothing to sync.');
     final fresh = pending.where((c) => c['airtable_id'] == null).toList();
     final again = pending.where((c) => c['airtable_id'] != null).toList();
     var sent = 0;
@@ -138,6 +145,7 @@ class AirtableSync {
         for (var j = 0; j < chunk.length; j++) {
           await Db.instance.markSynced(chunk[j]['barcode'] as String, recs[j]['id'] as String);
         }
+        await _stampSync();
         sent += chunk.length;
       }
       for (var i = 0; i < again.length; i += 10) {
@@ -158,6 +166,7 @@ class AirtableSync {
         for (final c in chunk) {
           await Db.instance.markSynced(c['barcode'] as String, c['airtable_id'] as String);
         }
+        await _stampSync();
         sent += chunk.length;
       }
     } catch (e) {

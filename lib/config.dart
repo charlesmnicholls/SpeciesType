@@ -34,6 +34,10 @@ class Config {
   static const String fCheckedAt = 'Checked At';
   static const String fCheckedBy = 'Checked By';
 
+  // Status for a barcode that is not in the tree list. Airtable adds this option to
+  // the Status field on the first sync (typecast).
+  static const String statusNewTree = 'New tree';
+
   // Species shown in the drop down. Keep the spelling the same as in Airtable.
   static const List<String> species = [
     'Birch',

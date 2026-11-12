@@ -19,7 +19,9 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Map<String, Object?>? _tree;
   Map<String, Object?>? _existing;
-  String? _error;
+  // True when the scanned barcode is not in the tree list. The volunteer then
+  // records the species, and the result syncs with Status "New tree".
+  bool _isNew = false;
   Map<String, int> _counts = {'total': 0, 'checked': 0, 'changed': 0, 'pending': 0, 'today': 0};
   bool _syncing = false;
 
@@ -95,15 +97,15 @@ class _ScanScreenState extends State<ScanScreen> {
       return;
     }
     final tree = await Db.instance.getTree(code);
-    final existing = tree == null ? null : await Db.instance.getCheck(code);
+    final existing = await Db.instance.getCheck(code);
     if (!mounted) return;
     await _buzz();
     setState(() {
-      _tree = tree;
+      _isNew = tree == null;
+      _tree = tree ??
+          {'barcode': code, 'species': '', 'plot': code.length >= 2 ? code.substring(0, 2) : ''};
       _existing = existing;
-      _error = tree == null ? 'Barcode $code is not in the database.' : null;
     });
-    if (tree == null) _focus.requestFocus();
   }
 
   Future<void> _save(String confirmed) async {
@@ -115,13 +117,14 @@ class _ScanScreenState extends State<ScanScreen> {
       recorded: (t['species'] as String?) ?? '',
       confirmed: confirmed,
       handset: await Settings.handset,
+      newTree: _isNew,
     );
     await _buzz();
     if (!mounted) return;
     setState(() {
       _tree = null;
       _existing = null;
-      _error = null;
+      _isNew = false;
     });
     await _refreshCounts();
     _snack('Saved: $confirmed');
@@ -139,9 +142,10 @@ class _ScanScreenState extends State<ScanScreen> {
           shrinkWrap: true,
           padding: const EdgeInsets.all(12),
           children: [
-            const Padding(
-              padding: EdgeInsets.all(8),
-              child: Text('Correct species', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(_isNew ? 'Tree species' : 'Correct species',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             ),
             for (final s in Config.species)
               Padding(
@@ -245,13 +249,6 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Widget _body() {
-    if (_error != null) {
-      return Center(
-        child: Text(_error!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, color: Colors.red, fontWeight: FontWeight.bold)),
-      );
-    }
     final t = _tree;
     if (t == null) {
       return const Center(
@@ -263,6 +260,7 @@ class _ScanScreenState extends State<ScanScreen> {
     // Small screen (Nautiz X41): the species panel takes the free space, and the
     // text scales down to fit it. Buttons have fixed, finger-sized heights.
     final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
+    final isNew = _isNew;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -273,8 +271,8 @@ class _ScanScreenState extends State<ScanScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
-              border: Border.all(color: Colors.green.shade200),
+              color: isNew ? Colors.amber.shade50 : Colors.green.shade50,
+              border: Border.all(color: isNew ? Colors.amber.shade300 : Colors.green.shade200),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -283,11 +281,22 @@ class _ScanScreenState extends State<ScanScreen> {
                 Flexible(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text(species.isEmpty ? 'No species' : species,
+                    child: Text(
+                        isNew
+                            ? 'New tree'
+                            : species.isEmpty
+                                ? 'No species'
+                                : species,
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 44, fontWeight: FontWeight.bold)),
                   ),
                 ),
+                if (isNew)
+                  const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Not in the database. Record the species.',
+                        style: TextStyle(fontSize: 18)),
+                  ),
                 if (prev != null)
                   FittedBox(
                     fit: BoxFit.scaleDown,
@@ -301,24 +310,37 @@ class _ScanScreenState extends State<ScanScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 72,
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: Colors.green.shade700, shape: buttonShape),
-            onPressed: species.isEmpty ? null : () => _save(species),
-            child: const Text('CORRECT', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+        if (isNew)
+          SizedBox(
+            height: 72,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green.shade700, shape: buttonShape),
+              onPressed: _change,
+              child: const Text('RECORD SPECIES',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+            ),
+          )
+        else ...[
+          SizedBox(
+            height: 72,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: Colors.green.shade700, shape: buttonShape),
+              onPressed: species.isEmpty ? null : () => _save(species),
+              child: const Text('CORRECT', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 56,
-          child: OutlinedButton(
-            style: OutlinedButton.styleFrom(shape: buttonShape),
-            onPressed: _change,
-            child: const Text('CHANGE SPECIES', style: TextStyle(fontSize: 22)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 56,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(shape: buttonShape),
+              onPressed: _change,
+              child: const Text('CHANGE SPECIES', style: TextStyle(fontSize: 22)),
+            ),
           ),
-        ),
+        ],
       ],
     );
   }

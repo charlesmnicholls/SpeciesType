@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'airtable_sync.dart';
 import 'db.dart';
 import 'export.dart';
+import 'format.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -23,6 +24,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _exported = false;
   int _stored = 0;
   int _unsynced = 0;
+  int _synced = 0;
+  int _trees = 0;
+  String _lastSync = 'Never';
+  String _lastDownload = 'Never';
 
   @override
   void initState() {
@@ -43,10 +48,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _refreshCounts() async {
     final c = await Db.instance.counts();
+    final lastSync = await Db.instance.getSetting(AirtableSync.lastSyncKey);
+    final lastDownload = await Db.instance.getSetting(AirtableSync.lastDownloadKey);
     if (!mounted) return;
     setState(() {
       _stored = c['checked'] ?? 0;
       _unsynced = c['pending'] ?? 0;
+      _synced = c['synced'] ?? 0;
+      _trees = c['total'] ?? 0;
+      _lastSync = formatIso(lastSync);
+      _lastDownload = formatIso(lastDownload);
     });
   }
 
@@ -185,7 +196,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.build_outlined),
               title: const Text('Setup', style: big),
               childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Text(
+                  'Last sync: $_lastSync\n'
+                  'Synced records on handset: $_synced\n'
+                  'Trees downloaded: $_lastDownload\n'
+                  'Trees in database: $_trees',
+                  style: const TextStyle(fontSize: 17, height: 1.4),
+                ),
+                const SizedBox(height: 12),
                 _button(OutlinedButton.icon(
                   onPressed: _busy ? null : _download,
                   icon: const Icon(Icons.forest_outlined),

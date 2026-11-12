@@ -104,6 +104,7 @@ class Db {
     required String recorded,
     required String confirmed,
     required String handset,
+    bool newTree = false,
   }) async {
     final d = await db;
     final ids = await d.query('airtable_ids', where: 'barcode = ?', whereArgs: [barcode]);
@@ -114,7 +115,12 @@ class Db {
         'plot': plot,
         'recorded': recorded,
         'confirmed': confirmed,
-        'status': confirmed == recorded ? 'Confirmed' : 'Changed',
+        // New tree = barcode not in the downloaded tree list.
+        'status': newTree
+            ? Config.statusNewTree
+            : confirmed == recorded
+                ? 'Confirmed'
+                : 'Changed',
         'checked_at': DateTime.now().toUtc().toIso8601String(),
         'handset': handset,
         'synced': 0,
@@ -161,6 +167,7 @@ class Db {
       'checked': await q('SELECT COUNT(*) FROM checks'),
       'changed': await q("SELECT COUNT(*) FROM checks WHERE status = 'Changed'"),
       'pending': await q('SELECT COUNT(*) FROM checks WHERE synced = 0'),
+      'synced': await q('SELECT COUNT(*) FROM checks WHERE synced = 1'),
       'today': await q('SELECT COUNT(*) FROM checks WHERE checked_at >= ?', [startOfToday]),
     };
   }
