@@ -37,6 +37,9 @@ class Config {
   // Status for a barcode that is not in the tree list. Airtable adds this option to
   // the Status field on the first sync (typecast).
   static const String statusNewTree = 'New tree';
+  // Status for a tree that is dead, missing or cannot be identified. Confirmed
+  // Species is empty for these.
+  static const String statusDeadMissing = 'Dead/Missing';
 
   // Species shown in the drop down. Keep the spelling the same as in Airtable.
   static const List<String> species = [

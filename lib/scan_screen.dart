@@ -91,7 +91,12 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _lookup(String raw) async {
     final code = raw.replaceAll(RegExp(r'[\r\n\s]'), '');
-    _ctrl.clear();
+    // Keep the scanned barcode in the box. Select it all, so the next scan or key
+    // press replaces it.
+    _ctrl.value = TextEditingValue(
+      text: code,
+      selection: TextSelection(baseOffset: 0, extentOffset: code.length),
+    );
     if (code.isEmpty) {
       _focus.requestFocus();
       return;
@@ -108,7 +113,8 @@ class _ScanScreenState extends State<ScanScreen> {
     });
   }
 
-  Future<void> _save(String confirmed) async {
+  /// Save the result. [dead] = tree is dead or missing; no species is recorded.
+  Future<void> _save(String confirmed, {bool dead = false}) async {
     final t = _tree;
     if (t == null) return;
     await Db.instance.saveCheck(
@@ -118,52 +124,102 @@ class _ScanScreenState extends State<ScanScreen> {
       confirmed: confirmed,
       handset: await Settings.handset,
       newTree: _isNew,
+      status: dead ? Config.statusDeadMissing : null,
     );
     await _buzz();
     if (!mounted) return;
+    _ctrl.clear();
     setState(() {
       _tree = null;
       _existing = null;
       _isNew = false;
     });
     await _refreshCounts();
-    _snack('Saved: $confirmed');
+    _snack('Saved: ${dead ? Config.statusDeadMissing : confirmed}');
     _focus.requestFocus();
     if ((_counts['pending'] ?? 0) >= 20 && !_syncing) _sync(quiet: true);
   }
 
   Future<void> _change() async {
     final current = (_tree?['species'] as String?) ?? '';
-    final choice = await showModalBottomSheet<String>(
+    const other = 'Other';
+    // Two columns, so all species and "Other" fit on one screen without scrolling.
+    Widget tile(BuildContext ctx, String s) => FilledButton.tonal(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: s == current ? null : () => Navigator.pop(ctx, s),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(s, style: const TextStyle(fontSize: 22)),
+          ),
+        );
+    var choice = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.all(12),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(_isNew ? 'Tree species' : 'Correct species',
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            ),
-            for (final s in Config.species)
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: SizedBox(
-                  height: 60,
-                  child: FilledButton.tonal(
-                    onPressed: s == current ? null : () => Navigator.pop(ctx, s),
-                    child: Text(s, style: const TextStyle(fontSize: 24)),
-                  ),
-                ),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(_isNew ? 'Tree species' : 'Correct species',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               ),
-          ],
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 2.6,
+                children: [
+                  for (final s in Config.species) tile(ctx, s),
+                  tile(ctx, other),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (choice != null) await _save(choice);
+    if (choice == other) choice = await _askOther();
+    if (choice != null && choice.isNotEmpty) await _save(choice);
     if (mounted) _focus.requestFocus();
+  }
+
+  /// Free text species for "Other". Returns null if the volunteer cancels.
+  Future<String?> _askOther() {
+    final c = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        void ok() {
+          final v = c.text.trim();
+          if (v.isNotEmpty) Navigator.pop(ctx, v);
+        }
+
+        return AlertDialog(
+          title: const Text('Other species'),
+          content: TextField(
+            controller: c,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            style: const TextStyle(fontSize: 22),
+            decoration: const InputDecoration(hintText: 'For example: Hazel'),
+            onSubmitted: (_) => ok(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: ok, child: const Text('Save')),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _sync({bool quiet = false}) async {
@@ -261,10 +317,13 @@ class _ScanScreenState extends State<ScanScreen> {
     // text scales down to fit it. Buttons have fixed, finger-sized heights.
     final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
     final isNew = _isNew;
+    // Full barcode is in the scan box. Here: tree number = last 3 digits.
+    final code = t['barcode'] as String;
+    final treeNo = code.length > 3 ? code.substring(code.length - 3) : code;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Tree ${t['barcode']}   Plot ${t['plot']}',
+        Text('Tree $treeNo   Plot ${t['plot']}',
             textAlign: TextAlign.center, style: const TextStyle(fontSize: 18)),
         const SizedBox(height: 6),
         Expanded(
@@ -301,7 +360,7 @@ class _ScanScreenState extends State<ScanScreen> {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      'Already checked: ${prev['confirmed']}',
+                      'Already checked: ${'${prev['confirmed'] ?? ''}'.isEmpty ? prev['status'] : prev['confirmed']}',
                       style: TextStyle(fontSize: 18, color: Colors.orange.shade800),
                     ),
                   ),
@@ -309,31 +368,27 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        if (isNew)
-          SizedBox(
-            height: 72,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green.shade700, shape: buttonShape),
-              onPressed: _change,
-              child: const Text('RECORD SPECIES',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-            ),
-          )
-        else ...[
-          SizedBox(
-            height: 72,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green.shade700, shape: buttonShape),
-              onPressed: species.isEmpty ? null : () => _save(species),
-              child: const Text('CORRECT', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-            ),
+        // Three buttons. The species panel above is Expanded, so it gives up the
+        // space for the third button and the screen does not get longer.
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 64,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Colors.green.shade700, shape: buttonShape),
+            onPressed: isNew
+                ? _change
+                : species.isEmpty
+                    ? null
+                    : () => _save(species),
+            child: Text(isNew ? 'RECORD SPECIES' : 'CORRECT',
+                style: TextStyle(fontSize: isNew ? 26 : 30, fontWeight: FontWeight.bold)),
           ),
-          const SizedBox(height: 8),
+        ),
+        if (!isNew) ...[
+          const SizedBox(height: 6),
           SizedBox(
-            height: 56,
+            height: 48,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(shape: buttonShape),
               onPressed: _change,
@@ -341,6 +396,19 @@ class _ScanScreenState extends State<ScanScreen> {
             ),
           ),
         ],
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              shape: buttonShape,
+              foregroundColor: Colors.red.shade800,
+              side: BorderSide(color: Colors.red.shade300),
+            ),
+            onPressed: () => _save('', dead: true),
+            child: const Text('DEAD / MISSING', style: TextStyle(fontSize: 22)),
+          ),
+        ),
       ],
     );
   }

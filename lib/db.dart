@@ -105,6 +105,7 @@ class Db {
     required String confirmed,
     required String handset,
     bool newTree = false,
+    String? status,
   }) async {
     final d = await db;
     final ids = await d.query('airtable_ids', where: 'barcode = ?', whereArgs: [barcode]);
@@ -115,12 +116,13 @@ class Db {
         'plot': plot,
         'recorded': recorded,
         'confirmed': confirmed,
-        // New tree = barcode not in the downloaded tree list.
-        'status': newTree
-            ? Config.statusNewTree
-            : confirmed == recorded
-                ? 'Confirmed'
-                : 'Changed',
+        // [status] overrides (Dead/Missing). New tree = barcode not in the tree list.
+        'status': status ??
+            (newTree
+                ? Config.statusNewTree
+                : confirmed == recorded
+                    ? 'Confirmed'
+                    : 'Changed'),
         'checked_at': DateTime.now().toUtc().toIso8601String(),
         'handset': handset,
         'synced': 0,
